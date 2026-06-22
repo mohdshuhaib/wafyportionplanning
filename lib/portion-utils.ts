@@ -1,0 +1,15 @@
+export type Semester = 'SEM-1' | 'SEM-2';
+export type CalendarDay = { value:string; day:number; monthLabel:string };
+export type WorkingWeek = { key:string; monthKey:string; monthLabel:string; weekNo:number; dateFrom:string; dateTo:string; workingDates:string[] };
+export const SEMESTER_LABELS:Record<Semester,string[]> = { 'SEM-1':['June','July','August','September','October','November'], 'SEM-2':['November','December','January','February','March','April','May'] };
+export function academicYearBase(now=new Date()){ return now.getMonth()<5?now.getFullYear()-1:now.getFullYear(); }
+export function iso(d:Date){ return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+export function parseLocal(value:string){ const [y,m,d]=value.split('-').map(Number); return new Date(y,m-1,d); }
+export function formatDate(value:string){ return parseLocal(value).toLocaleDateString('en-IN',{day:'numeric',month:'short'}); }
+export function semesterRange(semester:Semester,year:number){ return semester==='SEM-1'?{start:new Date(year,5,1),end:new Date(year,10,30)}:{start:new Date(year,10,1),end:new Date(year+1,4,31)}; }
+const MONTH_NUMBER:Record<string,number>={January:1,February:2,March:3,April:4,May:5,June:6,July:7,August:8,September:9,October:10,November:11,December:12};
+const MONTH_LENGTH:Record<string,number>={January:31,February:29,March:31,April:30,May:31,June:30,July:31,August:31,September:30,October:31,November:30,December:31};
+export function semesterDays(semester:Semester){ return SEMESTER_LABELS[semester].flatMap(monthLabel=>Array.from({length:MONTH_LENGTH[monthLabel]},(_,index)=>{const day=index+1;return {value:`${String(MONTH_NUMBER[monthLabel]).padStart(2,'0')}-${String(day).padStart(2,'0')}`,day,monthLabel};})); }
+export function buildWorkingWeeks(semester:Semester,year:number,excluded:Set<string>){ const {start,end}=semesterRange(semester,year); const cursor=new Date(start); cursor.setDate(cursor.getDate()-(cursor.getDay()===0?6:cursor.getDay()-1)); const out:WorkingWeek[]=[]; let i=1; while(cursor<=end){ const monday=new Date(cursor), sunday=new Date(cursor); sunday.setDate(sunday.getDate()+6); const days:string[]=[]; for(let j=0;j<7;j++){ const d=new Date(monday);d.setDate(d.getDate()+j);const v=iso(d);if(d>=start&&d<=end&&!excluded.has(v.slice(5)))days.push(v); } const anchor=days.length?parseLocal(days[Math.floor(days.length/2)]):new Date(monday); const monthKey=`${anchor.getFullYear()}-${String(anchor.getMonth()+1).padStart(2,'0')}`; out.push({key:`${semester}-${year}-WK-${i}`,monthKey,monthLabel:anchor.toLocaleDateString('en',{month:'long'}),weekNo:i,dateFrom:iso(monday),dateTo:iso(sunday),workingDates:days}); i++;cursor.setDate(cursor.getDate()+7); } return out; }
+export function status(actual:number,expected:number){ if(actual===0)return 'Pending';if(actual<expected*.95)return 'Behind';if(actual>expected*1.05)return 'Ahead';return 'On track'; }
+export function statusStyle(value:string){ return value==='Behind'?'bg-red-50 text-red-700':value==='Ahead'?'bg-blue-50 text-blue-700':value==='On track'?'bg-emerald-50 text-emerald-700':'bg-stone-100 text-stone-600'; }
