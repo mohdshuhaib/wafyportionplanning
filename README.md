@@ -12,6 +12,8 @@ All browser data access goes through validated Next.js route handlers. Database 
 
 If the database was created from an earlier version of this project, run `supabase/migrate-calendar-to-manual.sql` once. The calendar is a permanent month/day template, so its manually selected holidays apply every year and February always includes date 29.
 
+After that, run `supabase/migrate-monthly-accordions.sql` to add manual month statuses and month-owned Week 1–5 ranges.
+
 ## Deployment
 
 Add the same two environment variables to Vercel (or your host), deploy, and keep the service role key server-only. Because the requested app has no authentication, anyone who can reach the deployed site can use its UI and server endpoints; restrict the deployment at the network/platform layer if the site must remain campus-only.

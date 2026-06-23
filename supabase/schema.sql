@@ -29,22 +29,33 @@ create table if not exists public.subjects (
 );
 create table if not exists public.week_progress (
   id uuid primary key default gen_random_uuid(), subject_id uuid not null references public.subjects(id) on delete cascade,
-  week_key text not null, month_key text not null, week_no integer not null check (week_no>0), date_from date not null, date_to date not null,
+  week_key text not null, month_key text not null, week_no integer not null check (week_no between 1 and 5),
+  date_from text not null check (date_from ~ '^(0[1-9]|1[0-2])-[0-3][0-9]$'),
+  date_to text not null check (date_to ~ '^(0[1-9]|1[0-2])-[0-3][0-9]$'),
   period_taken numeric(10,2) not null default 0 check (period_taken>=0), pages_taken numeric(10,2) not null default 0 check (pages_taken>=0), remarks text not null default '' check(char_length(remarks)<=500),
   created_at timestamptz not null default now(), updated_at timestamptz not null default now(), row_version integer not null default 1,
   unique(subject_id,week_key)
 );
+create table if not exists public.subject_month_status (
+  id uuid primary key default gen_random_uuid(), subject_id uuid not null references public.subjects(id) on delete cascade,
+  month_key text not null check (month_key ~ '^(0[1-9]|1[0-2])$'),
+  status text not null default 'pending' check (status in ('pending','behind','on-track','ahead')),
+  created_at timestamptz not null default now(), updated_at timestamptz not null default now(), row_version integer not null default 1,
+  unique(subject_id,month_key)
+);
 create index if not exists subjects_class_sem_idx on public.subjects(class_id,academic_year,semester);
 create index if not exists progress_subject_idx on public.week_progress(subject_id);
+create index if not exists month_status_subject_idx on public.subject_month_status(subject_id);
 create index if not exists exclusions_semester_idx on public.calendar_exclusions(semester);
 
 create or replace function public.touch_row() returns trigger language plpgsql as $$ begin new.updated_at=now();new.row_version=old.row_version+1;return new;end $$;
 drop trigger if exists touch_classes on public.classes; create trigger touch_classes before update on public.classes for each row execute function public.touch_row();
 drop trigger if exists touch_subjects on public.subjects; create trigger touch_subjects before update on public.subjects for each row execute function public.touch_row();
 drop trigger if exists touch_progress on public.week_progress; create trigger touch_progress before update on public.week_progress for each row execute function public.touch_row();
+drop trigger if exists touch_month_status on public.subject_month_status; create trigger touch_month_status before update on public.subject_month_status for each row execute function public.touch_row();
 
 -- Atomic compare-and-swap: prevents two editors from silently overwriting one week.
-create or replace function public.save_week_progress(p_subject_id uuid,p_week_key text,p_month_key text,p_week_no integer,p_date_from date,p_date_to date,p_period_taken numeric,p_pages_taken numeric,p_remarks text,p_expected_version integer)
+create or replace function public.save_week_progress(p_subject_id uuid,p_week_key text,p_month_key text,p_week_no integer,p_date_from text,p_date_to text,p_period_taken numeric,p_pages_taken numeric,p_remarks text,p_expected_version integer)
 returns boolean language plpgsql security definer set search_path=public as $$
 declare affected integer;
 begin
@@ -57,5 +68,5 @@ begin
  where subject_id=p_subject_id and week_key=p_week_key and row_version=p_expected_version; get diagnostics affected=row_count; return affected=1;
 end $$;
 revoke all on all tables in schema public from anon,authenticated;
-revoke all on function public.save_week_progress(uuid,text,text,integer,date,date,numeric,numeric,text,integer) from public,anon,authenticated;
-alter table public.classes enable row level security; alter table public.calendar_exclusions enable row level security; alter table public.subjects enable row level security; alter table public.week_progress enable row level security;
+revoke all on function public.save_week_progress(uuid,text,text,integer,text,text,numeric,numeric,text,integer) from public,anon,authenticated;
+alter table public.classes enable row level security; alter table public.calendar_exclusions enable row level security; alter table public.subjects enable row level security; alter table public.week_progress enable row level security; alter table public.subject_month_status enable row level security;
